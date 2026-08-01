@@ -1,5 +1,9 @@
 # Port Authority
 
+[![Tests](https://github.com/tyy130/port-authority/actions/workflows/test.yml/badge.svg)](https://github.com/tyy130/port-authority/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](setup.py)
+
 A small local daemon that hands out ports on request instead of every project guessing or scanning for a free one. One project asks "give me a port for `web`," another asks for `api`, and Port Authority makes sure they never collide — including with things it didn't allocate (Docker containers, stray processes, anything already bound).
 
 ## Features
