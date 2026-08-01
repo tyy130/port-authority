@@ -1,0 +1,54 @@
+#!/bin/bash
+# Pre-commit hook: Warn about hardcoded ports
+
+# Check for common hardcoded port patterns
+PATTERNS=(
+  'port.*3000'
+  'port.*8000'
+  'port.*5000'
+  '":3000'
+  '":8000'
+  '":5000'
+  'localhost:3000'
+  'localhost:8000'
+  'localhost:5000'
+  '-p 3000'
+  '-p 8000'
+  '-p 5000'
+)
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+HARDCODED_FOUND=0
+
+for pattern in "${PATTERNS[@]}"; do
+  MATCHES=$(git diff --cached --unified=0 -- $STAGED_FILES | grep "^+" | grep -v "^+++" | grep -i "$pattern" || true)
+
+  if [ ! -z "$MATCHES" ]; then
+    if [ $HARDCODED_FOUND -eq 0 ]; then
+      echo ""
+      echo "⚠️  Port Authority: Hardcoded ports detected in staged changes:"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      HARDCODED_FOUND=1
+    fi
+    echo "$MATCHES" | sed 's/^+/  ➜ /'
+  fi
+done
+
+if [ $HARDCODED_FOUND -eq 1 ]; then
+  echo ""
+  echo "💡 Suggestion: Use Port Authority instead:"
+  echo "  PORT=\$(port myproject myservice)"
+  echo "  # Then use \$PORT in your config/code"
+  echo ""
+  echo "Allow this commit anyway:"
+  echo "  git commit --no-verify"
+  echo ""
+  exit 1
+fi
+
+exit 0

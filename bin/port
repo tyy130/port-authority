@@ -1,0 +1,12 @@
+#!/bin/bash
+# Friendly wrapper for Port Authority CLI
+# Usage: port myproject myservice [pool]
+
+if [ $# -eq 0 ]; then
+    port-request status
+elif [ "$1" = "status" ]; then
+    shift
+    port-request status "$@"
+else
+    port-request request "$@"
+fi
