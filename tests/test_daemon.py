@@ -179,3 +179,95 @@ def test_sweep_stale_clears_timer_once_port_is_bound_again(authority):
     # NOT be reclaimed yet -- it needs a fresh grace period.
     assert authority.sweep_stale(dry_run=False, now=t0 + 20 * 60) == []
     assert 'proj:svc' in authority.allocations
+
+
+def _free_port():
+    """Ask the OS for a currently-unused port. Real default service ports
+    (5432, 6379, ...) can't be trusted to be free on a real dev machine --
+    this box had postgres, redis, AND an unrelated process on 8765 all
+    genuinely occupied while writing these tests, so hardcoding "probably
+    free" numbers is not safe here."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('127.0.0.1', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def test_known_service_gets_its_canonical_port(authority):
+    port = _free_port()
+    authority.known_services['test-db'] = port
+    assert authority.request_port('proj', 'test-db') == port
+
+
+def test_known_service_match_is_case_insensitive(authority):
+    port = _free_port()
+    authority.known_services['test-db'] = port
+    assert authority.request_port('proj', 'Test-DB') == port
+
+
+def test_known_service_aliases_map_to_the_same_port():
+    # Two DIFFERENT projects requesting two alias names for the same
+    # canonical port is a genuine collision (same as any other port
+    # collision) -- the second one correctly falls back rather than
+    # double-allocating, so that's not what this checks. This is a plain
+    # data check that the alias table itself is internally consistent.
+    from port_authority.daemon import DEFAULT_KNOWN_SERVICES
+
+    assert DEFAULT_KNOWN_SERVICES['postgres'] == DEFAULT_KNOWN_SERVICES['postgresql'] == DEFAULT_KNOWN_SERVICES['pg'] == 5432
+    assert DEFAULT_KNOWN_SERVICES['mysql'] == DEFAULT_KNOWN_SERVICES['mariadb'] == 3306
+    assert DEFAULT_KNOWN_SERVICES['mongodb'] == DEFAULT_KNOWN_SERVICES['mongo'] == 27017
+
+
+def test_unrecognized_service_name_uses_normal_pool_scan(authority):
+    # 'svc' isn't a known service -- falls straight through to pool scanning,
+    # same as before this feature existed.
+    port = authority.request_port('proj', 'svc')
+    assert 3000 <= port <= 4000
+
+
+def test_known_service_falls_back_to_pool_when_canonical_port_is_taken(authority):
+    port = _free_port()
+    authority.known_services['test-db'] = port
+
+    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    blocker.bind(('127.0.0.1', port))
+    blocker.listen(1)
+    try:
+        result = authority.request_port('proj', 'test-db')
+        assert result != port
+        assert 3000 <= result <= 4000  # fell back to the 'web' pool default
+    finally:
+        blocker.close()
+
+
+def test_known_service_falls_back_when_canonical_port_already_allocated(authority):
+    port = _free_port()
+    authority.known_services['test-db'] = port
+
+    first = authority.request_port('proj-a', 'test-db')
+    assert first == port
+
+    second = authority.request_port('proj-b', 'test-db')
+    assert second != port
+    assert 3000 <= second <= 4000
+
+
+def test_config_can_add_and_override_known_services(tmp_path, monkeypatch):
+    monkeypatch.setattr(daemon_module, 'STATE_FILE', tmp_path / 'allocations.json')
+    override_port = _free_port()
+    new_service_port = _free_port()
+    config_file = tmp_path / 'config.yaml'
+    config_file.write_text(
+        'known_services:\n'
+        f'  postgres: {override_port}\n'  # override a default
+        f'  my-custom-tool: {new_service_port}\n'  # add a new one
+    )
+    monkeypatch.setattr(daemon_module, 'CONFIG_FILE', config_file)
+
+    authority = PortAuthority()
+    assert authority.request_port('proj', 'postgres') == override_port
+    assert authority.request_port('proj', 'my-custom-tool') == new_service_port
+    # Unrelated defaults survive a partial override -- structural check, not
+    # a live allocation, since we can't assume 6379 is actually free here.
+    assert authority.known_services['redis'] == 6379

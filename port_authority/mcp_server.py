@@ -43,7 +43,9 @@ def request_port(project: str, service: str, pool: str = "web") -> str:
     same port, whether or not the service is currently running. Call this
     BEFORE starting a service instead of hardcoding or guessing a port
     number -- Port Authority verifies the port is actually free on the
-    machine, not just unclaimed in its own records.
+    machine, not just unclaimed in its own records. If `service` is a
+    recognized name (postgres, redis, mysql, mongodb, ...) it tries that
+    service's standard port first, falling back to the pool range if taken.
     """
     port = port_authority.request_port(project, service, pool)
     return f"Allocated port {port} for {project}:{service}"

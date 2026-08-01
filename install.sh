@@ -45,6 +45,13 @@ default_pool: web
 # sweep (and `port gc --force`) reclaim it. A service that's simply not
 # started yet won't be touched before this elapses.
 stale_after_minutes: 60
+
+# Requesting a port for a known service name (postgres, redis, mysql, ...)
+# tries its canonical port first, falling back to pool scanning if taken.
+# Uncomment to extend or override the built-in list:
+# known_services:
+#   postgres: 5432
+#   my-internal-tool: 7777
 EOF
     echo "✓ Created config at ~/.config/port-authority/config.yaml"
 fi

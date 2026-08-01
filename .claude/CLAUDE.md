@@ -65,6 +65,8 @@ PORT=$(port myproject postgres)
 docker run -p $PORT:5432 postgres
 ```
 
+Recognized service names (postgres, redis, mysql, mongodb, and others) get their standard port automatically when it's free, so `$PORT` is usually `5432` here — falling back to a pool port only if something else already has it. Either way this pattern is correct without changes: `docker run -p $PORT:5432` maps whatever host port got allocated to the container's real internal port.
+
 ### API server
 
 ```bash

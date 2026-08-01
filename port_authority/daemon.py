@@ -35,6 +35,32 @@ STATE_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_STALE_AFTER_MINUTES = 60
 GC_SWEEP_INTERVAL_SECONDS = 60
 
+# Canonical default ports for common dev services. Requesting a port for a
+# service whose name (or alias) matches one of these tries that exact port
+# first -- so `port myproject postgres` gets 5432 if it's free, instead of
+# an arbitrary port from whatever pool happened to be scanned. Falls back to
+# normal pool-range allocation if the canonical port is unavailable, so this
+# never turns into a hard requirement. Extend or override via config.yaml's
+# `known_services` key -- see README.
+DEFAULT_KNOWN_SERVICES = {
+    'postgres': 5432, 'postgresql': 5432, 'pg': 5432,
+    'mysql': 3306, 'mariadb': 3306,
+    'mongodb': 27017, 'mongo': 27017,
+    'redis': 6379,
+    'memcached': 11211,
+    'rabbitmq': 5672,
+    'elasticsearch': 9200, 'es': 9200,
+    'kafka': 9092,
+    'cassandra': 9042,
+    'influxdb': 8086,
+    'neo4j': 7474,
+    'etcd': 2379,
+    'consul': 8500,
+    'zookeeper': 2181,
+    'sqlserver': 1433, 'mssql': 1433,
+    'clickhouse': 8123,
+}
+
 # project/service names become "project:service" registry keys and get
 # interpolated into shell commands by callers, so keep them restrictive.
 NAME_RE = re.compile(r'^[A-Za-z0-9_-]+$')
@@ -78,6 +104,7 @@ class PortAuthority:
         self.allocations = {}
         self.pools = {}
         self.stale_after_minutes = DEFAULT_STALE_AFTER_MINUTES
+        self.known_services = dict(DEFAULT_KNOWN_SERVICES)
         self.lock = threading.Lock()
         self.load_config()
         self.load_state()
@@ -89,6 +116,10 @@ class PortAuthority:
                 config = yaml.safe_load(f) or {}
                 self.pools = config.get('pools', self._default_pools())
                 self.stale_after_minutes = config.get('stale_after_minutes', DEFAULT_STALE_AFTER_MINUTES)
+                self.known_services = {
+                    **DEFAULT_KNOWN_SERVICES,
+                    **(config.get('known_services') or {}),
+                }
         else:
             self.pools = self._default_pools()
 
@@ -139,6 +170,26 @@ class PortAuthority:
                 start, end = pool_cfg['range']
             except (ValueError, TypeError):
                 return {'error': f'Invalid range config for pool {pool}'}
+
+            # Known service (postgres, redis, ...)? Try its canonical port
+            # before falling back to pool scanning -- checked against every
+            # allocation regardless of pool, since these ports are usually
+            # outside the requested pool's range entirely.
+            known_port = self.known_services.get(service.lower())
+            if known_port is not None:
+                all_allocated = {v['port'] for v in self.allocations.values()}
+                if known_port not in all_allocated and is_port_free(known_port):
+                    self.allocations[key] = {
+                        'port': known_port,
+                        'project': project,
+                        'service': service,
+                        'pool': pool,
+                        'allocated_at': time.time(),
+                    }
+                    self.save_state()
+                    logger.info(f"Allocated known-service port {known_port} to {project}:{service}")
+                    return known_port
+
             allocated_ports = {v['port'] for v in self.allocations.values() if v['pool'] == pool}
 
             # Find first port that's both unclaimed in our registry AND

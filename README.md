@@ -9,6 +9,7 @@ A small local daemon that hands out ports on request instead of every project gu
 - **Token auth**: the daemon generates a local secret on first start; the CLI/library read it automatically — no plaintext-anyone-on-the-box access
 - **Stale-allocation cleanup**: a background sweep reclaims ports whose owner crashed and never released them, after a configurable grace period — plus `port gc` to preview or force it on demand
 - **Pool management**: configurable ranges per category (web, api, database, ...)
+- **Known services**: `port myproject postgres` tries port 5432 first (falling back to the normal pool scan if it's taken) — covers common databases, caches, and brokers out of the box, extendable via config
 - **REST API**: plain HTTP on `127.0.0.1:8888`
 - **CLI + Python library**: use from shell scripts or import directly
 - **Persistent state**: allocations survive daemon restarts (`~/.local/share/port-authority/allocations.json`)
@@ -74,6 +75,15 @@ default_pool: web
 # How long a port can sit allocated-but-unbound before the background
 # sweep (and `port gc --force`) reclaim it.
 stale_after_minutes: 60
+
+# Extend or override the built-in known-service ports (postgres, redis,
+# mysql, mongodb, and a couple dozen other common dev services -- see
+# DEFAULT_KNOWN_SERVICES in port_authority/daemon.py for the full list).
+# Requesting a port for one of these names tries the given port first,
+# falling back to normal pool scanning if it's taken.
+known_services:
+  postgres: 5432 # overrides the built-in default
+  my-internal-tool: 7777 # adds a new one
 ```
 
 Changes require restarting the daemon (`systemctl --user restart port-authority` on Linux, `launchctl kickstart -k gui/$(id -u)/com.portauthority.daemon` on macOS).
@@ -141,7 +151,7 @@ The tools call the exact same HTTP client the CLI uses (`port_authority.request_
 The registry is the source of truth for _who owns a port_, not whether it's currently bound. A healthy running service IS bound to its port — that's expected, not a conflict. So:
 
 - **Looking up an existing allocation** (`port myproject myservice` called again) always returns the same port, regardless of whether it's currently active or idle.
-- **Picking a brand-new port** for a key that isn't in the registry skips anything currently bound, whether Port Authority knows about it or not.
+- **Picking a brand-new port** for a key that isn't in the registry tries the service's canonical port first if it's a known one (see [Configuration](#configuration)), then skips anything currently bound — whether Port Authority knows about it or not — while scanning the pool range.
 - **Reclaiming an abandoned allocation** (owner crashed, never called `release`) only happens after the port has been continuously free for `stale_after_minutes` — a service that just hasn't started yet is never mistaken for a dead one.
 
 ## Known limitations
