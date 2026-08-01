@@ -31,6 +31,3 @@ wheels/
 .venv
 env/
 venv/
-
-# State files
-~/.local/share/port-authority/

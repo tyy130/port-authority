@@ -1,12 +1,36 @@
 #!/bin/bash
 # Friendly wrapper for Port Authority CLI
-# Usage: port myproject myservice [pool]
+#
+# Usage:
+#   port <project> <service> [--pool NAME]   Request a port
+#   port status [project]                    Show allocations, optionally filtered
+#   port release <project> <service>         Release an allocation
+#   port gc [--force]                        Preview/reclaim long-stale allocations
+
+set -e
 
 if [ $# -eq 0 ]; then
-    port-request status
-elif [ "$1" = "status" ]; then
-    shift
-    port-request status "$@"
-else
-    port-request request "$@"
+    exec port-request status
 fi
+
+case "$1" in
+  status)
+    shift
+    if [ $# -eq 0 ]; then
+      exec port-request status
+    else
+      exec port-request status --project "$1"
+    fi
+    ;;
+  release)
+    shift
+    exec port-request release "$@"
+    ;;
+  gc)
+    shift
+    exec port-request gc "$@"
+    ;;
+  *)
+    exec port-request request "$@"
+    ;;
+esac

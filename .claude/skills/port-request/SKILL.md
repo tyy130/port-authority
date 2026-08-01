@@ -12,7 +12,7 @@ Request an available port allocation from Port Authority instead of hardcoding o
 **Usage:**
 
 ```bash
-/port-request myproject myservice [pool]
+/port-request myproject myservice [--pool NAME]
 ```
 
 **Examples:**

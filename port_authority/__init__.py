@@ -1,9 +1,8 @@
 """Port Authority - Centralized port allocation."""
 
 import requests
-import json
 
-API_URL = 'http://127.0.0.1:8888'
+from port_authority._config import API_URL, auth_headers
 
 
 def request_port(project, service, pool='web'):
@@ -25,7 +24,7 @@ def request_port(project, service, pool='web'):
             'project': project,
             'service': service,
             'pool': pool,
-        }, timeout=2)
+        }, headers=auth_headers(), timeout=2)
         data = resp.json()
 
         if 'error' in data:
@@ -50,7 +49,7 @@ def release_port(project, service):
         resp = requests.get(f'{API_URL}/release', params={
             'project': project,
             'service': service,
-        }, timeout=2)
+        }, headers=auth_headers(), timeout=2)
         return resp.json().get('success', False)
     except requests.ConnectionError:
         raise Exception("Port Authority daemon not running")
@@ -63,14 +62,33 @@ def get_status(project=None):
         project: Optional project name to filter by
 
     Returns:
-        dict: Allocation status
+        dict: Allocation status, each entry annotated with 'active' (bool)
     """
     try:
         params = {'project': project} if project else {}
-        resp = requests.get(f'{API_URL}/status', params=params, timeout=2)
+        resp = requests.get(f'{API_URL}/status', params=params, headers=auth_headers(), timeout=2)
         return resp.json()
     except requests.ConnectionError:
         raise Exception("Port Authority daemon not running")
 
 
-__all__ = ['request_port', 'release_port', 'get_status']
+def gc(force=False):
+    """Preview (default) or perform reclamation of long-stale allocations.
+
+    Args:
+        force: If True, actually release stale allocations. If False
+            (default), only report what a real sweep would release.
+
+    Returns:
+        list: Allocations released (or that would be released)
+    """
+    try:
+        resp = requests.get(f'{API_URL}/gc', params={
+            'dry_run': 'false' if force else 'true',
+        }, headers=auth_headers(), timeout=5)
+        return resp.json()['released']
+    except requests.ConnectionError:
+        raise Exception("Port Authority daemon not running")
+
+
+__all__ = ['request_port', 'release_port', 'get_status', 'gc']

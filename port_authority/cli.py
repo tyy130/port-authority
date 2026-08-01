@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
 """Port Authority CLI - Command-line interface for port requests."""
 
-import json
 import requests
 import sys
 import argparse
 from pathlib import Path
 
-API_URL = 'http://127.0.0.1:8888'
+# Allow running this file directly (e.g. symlinked into ~/.local/bin) without
+# the package being pip-installed: put the repo root on sys.path so the
+# sibling "port_authority" package resolves.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from port_authority._config import API_URL, auth_headers
+
+
+def _headers_or_exit():
+    try:
+        return auth_headers()
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def request_port(project, service, pool='web'):
@@ -17,7 +29,7 @@ def request_port(project, service, pool='web'):
             'project': project,
             'service': service,
             'pool': pool,
-        }, timeout=2)
+        }, headers=_headers_or_exit(), timeout=2)
         data = resp.json()
 
         if 'error' in data:
@@ -37,7 +49,7 @@ def release_port(project, service):
         resp = requests.get(f'{API_URL}/release', params={
             'project': project,
             'service': service,
-        }, timeout=2)
+        }, headers=_headers_or_exit(), timeout=2)
         data = resp.json()
 
         if data.get('success'):
@@ -54,17 +66,41 @@ def show_status(project=None):
     """Show allocation status."""
     try:
         params = {'project': project} if project else {}
-        resp = requests.get(f'{API_URL}/status', params=params, timeout=2)
+        resp = requests.get(f'{API_URL}/status', params=params, headers=_headers_or_exit(), timeout=2)
         data = resp.json()
 
         if not data:
             print("No allocations")
             return
 
-        print(f"{'Project:Service':<30} {'Port':<8} {'Pool':<12}")
-        print("-" * 50)
+        print(f"{'Project:Service':<30} {'Port':<8} {'Pool':<12} {'Active':<8}")
+        print("-" * 58)
         for key, info in sorted(data.items()):
-            print(f"{key:<30} {info['port']:<8} {info['pool']:<12}")
+            active = 'yes' if info.get('active') else 'no'
+            print(f"{key:<30} {info['port']:<8} {info['pool']:<12} {active:<8}")
+    except requests.ConnectionError:
+        print("Error: Port Authority daemon not running", file=sys.stderr)
+        sys.exit(1)
+
+
+def run_gc(force=False):
+    """Preview or perform reclamation of long-stale allocations."""
+    try:
+        resp = requests.get(f'{API_URL}/gc', params={
+            'dry_run': 'false' if force else 'true',
+        }, headers=_headers_or_exit(), timeout=5)
+        data = resp.json()
+        released = data['released']
+
+        if not released:
+            print("Nothing stale enough to reclaim")
+            return
+
+        verb = "Reclaimed" if force else "Would reclaim (run with --force to actually release)"
+        print(f"{verb}:")
+        for r in released:
+            minutes = int(r['free_for_seconds'] // 60)
+            print(f"  {r['key']} — port {r['port']}, free for {minutes}m")
     except requests.ConnectionError:
         print("Error: Port Authority daemon not running", file=sys.stderr)
         sys.exit(1)
@@ -90,6 +126,10 @@ def main():
     st = subparsers.add_parser('status', help='Show allocations')
     st.add_argument('--project', help='Filter by project')
 
+    # gc command
+    gc = subparsers.add_parser('gc', help='Reclaim long-stale allocations')
+    gc.add_argument('--force', action='store_true', help='Actually release (default previews only)')
+
     args = parser.parse_args()
 
     if args.command == 'request':
@@ -98,6 +138,8 @@ def main():
         release_port(args.project, args.service)
     elif args.command == 'status':
         show_status(args.project)
+    elif args.command == 'gc':
+        run_gc(args.force)
     else:
         parser.print_help()
 

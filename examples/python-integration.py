@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Example: Using Port Authority from Python."""
+"""Example: Using Port Authority from Python.
+
+Run from anywhere: `pip install -e /path/to/port-authority` first, or just
+run this script directly — it adds the repo root to sys.path either way.
+"""
 
 import sys
-sys.path.insert(0, '..')
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from port_authority import request_port, release_port, get_status
 

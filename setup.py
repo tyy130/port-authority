@@ -6,7 +6,6 @@ setup(
     version='0.1.0',
     description='Centralized port allocation system for managing ports across multiple projects',
     author='Tyler Hill',
-    author_email='1forfunnn@gmail.com',
     url='https://github.com/tyy130/port-authority',
     packages=find_packages(),
     install_requires=[

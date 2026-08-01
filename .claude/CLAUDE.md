@@ -26,7 +26,7 @@ When you start building something:
 1. **Request a port first:**
 
    ```bash
-   PORT=$(port myproject myservice [pool])
+   PORT=$(port myproject myservice)
    ```
 
 2. **Use that port throughout:**

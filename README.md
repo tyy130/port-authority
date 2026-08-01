@@ -1,54 +1,57 @@
 # Port Authority
 
-A centralized port allocation system for managing ports across multiple projects. Instead of projects randomly picking ports or scanning for unused ones, they request allocations from Port Authority.
+A small local daemon that hands out ports on request instead of every project guessing or scanning for a free one. One project asks "give me a port for `web`," another asks for `api`, and Port Authority makes sure they never collide — including with things it didn't allocate (Docker containers, stray processes, anything already bound).
 
 ## Features
 
-- **Centralized allocation**: Single source of truth for port assignments
-- **Project isolation**: Track which project owns which port
-- **Pool management**: Configure port ranges for different services
-- **REST API**: Query via HTTP
-- **CLI tool**: Command-line interface for quick lookups
-- **Persistent state**: JSON-based registry survives restarts
-- **Agent-friendly**: Easy integration with Claude Code and scripts
+- **Centralized allocation**: one registry instead of every project picking its own port
+- **Real availability checks**: before handing out a port, the daemon actually tries to bind it — not just "not in my registry"
+- **Token auth**: the daemon generates a local secret on first start; the CLI/library read it automatically — no plaintext-anyone-on-the-box access
+- **Stale-allocation cleanup**: a background sweep reclaims ports whose owner crashed and never released them, after a configurable grace period — plus `port gc` to preview or force it on demand
+- **Pool management**: configurable ranges per category (web, api, database, ...)
+- **REST API**: plain HTTP on `127.0.0.1:8888`
+- **CLI + Python library**: use from shell scripts or import directly
+- **Persistent state**: allocations survive daemon restarts (`~/.local/share/port-authority/allocations.json`)
+- **Agent-friendly**: ships a Claude Code skill + `CLAUDE.md` snippet so agents ask for a port instead of hardcoding one
+- **Cross-platform auto-start**: systemd user service on Linux, launchd agent on macOS, both installed and started by `install.sh`; CI runs the full suite on both `ubuntu-latest` and `macos-latest`
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-git clone https://github.com/tyy130/port-authority.git ~/.local/src/port-authority
-cd ~/.local/src/port-authority
-pip install -r requirements.txt
-./install.sh  # Sets up systemd service
+git clone https://github.com/tyy130/port-authority.git
+cd port-authority
+./install.sh
 ```
+
+`install.sh` installs the Python deps, symlinks the CLI into `~/.local/bin`, writes a default config, and installs + starts the daemon as a background service — a systemd user unit on Linux, a launchd agent on macOS. Falls back to printing manual-start instructions if neither is available.
+
+Make sure `~/.local/bin` is on your `PATH`.
 
 ### Usage
 
-**Request a port:**
-
 ```bash
-port-request myproject myservice
-# Output: 3000
+# Friendly wrapper — request a port
+port myproject myservice
+# -> 3005
+
+# Same thing via the full CLI
+port-request request myproject myservice --pool web
+
+# Release it when the service stops
+port-request release myproject myservice
+
+# See everything currently allocated (with live active/inactive status)
+port status
+port-request status --project myproject
+
+# Preview allocations that would be reclaimed as stale, or force it now
+port gc
+port gc --force
 ```
 
-**Release a port:**
-
-```bash
-port-release myproject myservice
-```
-
-**Check all allocations:**
-
-```bash
-port-status
-```
-
-**Check specific project:**
-
-```bash
-port-status myproject
-```
+Project and service names must match `[A-Za-z0-9_-]+` — no colons or slashes, since names get embedded in the registry key.
 
 ## Configuration
 
@@ -66,16 +69,21 @@ pools:
     range: [8000, 9000]
     description: "Internal services"
 
-# Default pool if not specified
 default_pool: web
+
+# How long a port can sit allocated-but-unbound before the background
+# sweep (and `port gc --force`) reclaim it.
+stale_after_minutes: 60
 ```
+
+Changes require restarting the daemon (`systemctl --user restart port-authority` on Linux, `launchctl kickstart -k gui/$(id -u)/com.portauthority.daemon` on macOS).
 
 ## Integration
 
-### Bash/CLI
+### Bash
 
 ```bash
-PORT=$(port-request myproject myservice)
+PORT=$(port myproject myservice)
 echo "Starting on port $PORT"
 ```
 
@@ -91,31 +99,29 @@ print(f"Running on port {port}")
 release_port("myproject", "myservice")
 ```
 
-### Node.js
-
-```javascript
-const { requestPort, releasePort } = require("port-authority");
-
-const port = await requestPort("myproject", "myservice");
-console.log(`Running on port ${port}`);
-
-// When done:
-await releasePort("myproject", "myservice");
-```
-
 ### Claude Code / Agents
 
-```bash
-# In your project hooks or scripts:
-PORT=$(port-request my-project my-service)
-```
+Copy `.claude/CLAUDE.md` from this repo into your project (or `@`-reference it) so agents working in that codebase default to requesting a port instead of hardcoding `3000`. See [INTEGRATION.md](INTEGRATION.md) for the full setup, including an optional pre-commit hook that flags hardcoded ports in diffs.
 
 ## Architecture
 
-- **Daemon**: `port-authority-daemon` (systemd service)
+- **Daemon**: `port-authority-daemon` — a single-threaded `http.server` on `127.0.0.1:8888` (not exposed beyond localhost), plus a background thread that sweeps for stale allocations every 60s
+- **Auth**: a random token minted on first daemon start, stored at `~/.config/port-authority/token` (`0600`), required as a Bearer token on every request
 - **State**: `~/.local/share/port-authority/allocations.json`
-- **API**: REST on Unix socket `~/.local/run/port-authority.sock`
-- **CLI**: `port-request`, `port-release`, `port-status`
+- **CLI**: `port` (friendly wrapper) / `port-request` (full subcommands: `request`, `release`, `status`, `gc`)
+
+## How allocation ownership works
+
+The registry is the source of truth for _who owns a port_, not whether it's currently bound. A healthy running service IS bound to its port — that's expected, not a conflict. So:
+
+- **Looking up an existing allocation** (`port myproject myservice` called again) always returns the same port, regardless of whether it's currently active or idle.
+- **Picking a brand-new port** for a key that isn't in the registry skips anything currently bound, whether Port Authority knows about it or not.
+- **Reclaiming an abandoned allocation** (owner crashed, never called `release`) only happens after the port has been continuously free for `stale_after_minutes` — a service that just hasn't started yet is never mistaken for a dead one.
+
+## Known limitations
+
+- **Single machine.** There's no clustering or shared state across hosts — each machine runs its own daemon and registry.
+- **Trust model is "anyone who can read your dotfiles."** The token is a local secret file, not real per-caller identity — it stops a stray unprivileged process from guessing its way in, not a determined actor already on your account.
 
 ## License
 

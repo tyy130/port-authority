@@ -110,9 +110,20 @@ docker-compose -e WEB_PORT=$WEB_PORT -e API_PORT=$API_PORT -e DB_PORT=$DB_PORT u
 ## 8. Check Status
 
 ```bash
-port status                 # All allocations
+port status                 # All allocations, with live active/inactive state
 port status myproject       # Your project only
 ```
+
+## 9. Cleaning Up Abandoned Allocations
+
+If a service crashes without calling `release`, its allocation just sits there — Port Authority won't guess whether that's because the service is mid-restart or genuinely gone. After it's been continuously idle past `stale_after_minutes` (default 60), it becomes eligible for reclamation:
+
+```bash
+port gc            # preview what's eligible, changes nothing
+port gc --force    # actually release it
+```
+
+The background sweep also does this automatically every 60s, so `--force` is only for "I don't want to wait."
 
 ## Example: Integrating into Buzz
 
@@ -145,6 +156,10 @@ echo "@~/.local/src/port-authority/.claude/CLAUDE.md" >> .claude/CLAUDE.md
 systemctl --user status port-authority.service
 systemctl --user start port-authority.service
 ```
+
+**"No auth token found"**
+
+The daemon mints the token on its first start, at `~/.config/port-authority/token`. If it's missing, the daemon either never ran or something deleted the file — start (or restart) the daemon and it'll be recreated.
 
 **"Permission denied" on hooks**
 

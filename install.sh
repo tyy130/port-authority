@@ -6,7 +6,6 @@ echo "Installing Port Authority..."
 # Create directories
 mkdir -p ~/.local/bin
 mkdir -p ~/.local/share/port-authority
-mkdir -p ~/.local/run
 mkdir -p ~/.config/port-authority
 
 # Install Python dependencies
@@ -39,13 +38,19 @@ pools:
     description: "Tool services"
 
 default_pool: web
+
+# How long a port can sit allocated-but-unbound before the background
+# sweep (and `port gc --force`) reclaim it. A service that's simply not
+# started yet won't be touched before this elapses.
+stale_after_minutes: 60
 EOF
     echo "✓ Created config at ~/.config/port-authority/config.yaml"
 fi
 
-# Setup systemd service
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/port-authority.service << EOF
+# Setup auto-start (systemd on Linux; launchd guidance on macOS)
+if command -v systemctl >/dev/null 2>&1 && systemctl --user status >/dev/null 2>&1; then
+    mkdir -p ~/.config/systemd/user
+    cat > ~/.config/systemd/user/port-authority.service << EOF
 [Unit]
 Description=Port Authority Daemon
 After=network-online.target
@@ -61,14 +66,56 @@ RestartSec=5
 WantedBy=default.target
 EOF
 
-systemctl --user daemon-reload
-systemctl --user enable port-authority.service
-systemctl --user start port-authority.service
+    systemctl --user daemon-reload
+    systemctl --user enable port-authority.service
+    systemctl --user start port-authority.service
 
-echo "✓ Port Authority installed and started"
+    echo "✓ Port Authority installed and started (systemd user service)"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    mkdir -p ~/Library/LaunchAgents
+    PLIST=~/Library/LaunchAgents/com.portauthority.daemon.plist
+    cat > "$PLIST" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.portauthority.daemon</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$HOME/.local/bin/port-authority-daemon</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$HOME/.local/share/port-authority/daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/.local/share/port-authority/daemon.err.log</string>
+</dict>
+</plist>
+EOF
+
+    launchctl unload "$PLIST" 2>/dev/null || true
+    launchctl load "$PLIST"
+
+    echo "✓ Port Authority installed and started (launchd agent)"
+    echo "  Logs: ~/.local/share/port-authority/daemon.log"
+else
+    echo "✓ Port Authority CLI installed"
+    echo ""
+    echo "⚠️  No systemd user session detected — start the daemon manually:"
+    echo "  port-authority-daemon &"
+fi
+
+echo ""
+echo "The daemon generates an auth token on first start at"
+echo "  ~/.config/port-authority/token"
+echo "The CLI and Python library read it automatically — nothing to configure."
 echo ""
 echo "Quick test:"
-echo "  port-request myproject myservice"
+echo "  port myproject myservice"
 echo ""
 echo "View status:"
-echo "  port-request status"
+echo "  port status"
