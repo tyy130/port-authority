@@ -12,10 +12,14 @@ setup(
         'requests>=2.28.0',
         'pyyaml>=6.0',
     ],
+    extras_require={
+        'mcp': ['mcp[cli]>=2.0.0'],
+    },
     entry_points={
         'console_scripts': [
             'port-request=port_authority.cli:main',
             'port-authority-daemon=port_authority.daemon:run_daemon',
+            'port-authority-mcp=port_authority.mcp_server:main',
         ],
     },
     python_requires='>=3.8',

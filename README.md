@@ -12,7 +12,7 @@ A small local daemon that hands out ports on request instead of every project gu
 - **REST API**: plain HTTP on `127.0.0.1:8888`
 - **CLI + Python library**: use from shell scripts or import directly
 - **Persistent state**: allocations survive daemon restarts (`~/.local/share/port-authority/allocations.json`)
-- **Agent-friendly**: ships a Claude Code skill + `CLAUDE.md` snippet so agents ask for a port instead of hardcoding one
+- **Agent-friendly**: ships a Claude Code skill + `CLAUDE.md` snippet (no extra dependencies) _and_ a real [MCP server](#mcp-server-any-mcp-client) (optional dependency) so any MCP-compatible agent — not just Claude Code — can call it as a native tool
 - **Cross-platform auto-start**: systemd user service on Linux, launchd agent on macOS, both installed and started by `install.sh`; CI runs the full suite on both `ubuntu-latest` and `macos-latest`
 
 ## Quick Start
@@ -103,12 +103,38 @@ release_port("myproject", "myservice")
 
 Copy `.claude/CLAUDE.md` from this repo into your project (or `@`-reference it) so agents working in that codebase default to requesting a port instead of hardcoding `3000`. See [INTEGRATION.md](INTEGRATION.md) for the full setup, including an optional pre-commit hook that flags hardcoded ports in diffs.
 
+### MCP server (any MCP client)
+
+The `.claude/` convention above only means anything to Claude Code — it's a file another tool has no reason to look at. For every other MCP-compatible client (Claude Desktop, other agent frameworks), Port Authority also ships as a real [MCP](https://modelcontextprotocol.io) server exposing `request_port`, `release_port`, `port_status`, and `port_gc` as native tools, over the standard stdio transport.
+
+This is an optional dependency (requires Python 3.10+; the base install works on 3.9+ and stays stdlib-only otherwise):
+
+```bash
+pip install -r requirements-mcp.txt   # or: pip install "port-authority[mcp]"
+```
+
+Register it with any MCP client by pointing at the script (adjust the path to your clone):
+
+```json
+{
+  "mcpServers": {
+    "port-authority": {
+      "command": "python3",
+      "args": ["/path/to/port-authority/port_authority/mcp_server.py"]
+    }
+  }
+}
+```
+
+The tools call the exact same HTTP client the CLI uses (`port_authority.request_port` etc.) — same auth, same error messages, same behavior, just exposed over MCP instead of the command line.
+
 ## Architecture
 
 - **Daemon**: `port-authority-daemon` — a single-threaded `http.server` on `127.0.0.1:8888` (not exposed beyond localhost), plus a background thread that sweeps for stale allocations every 60s
 - **Auth**: a random token minted on first daemon start, stored at `~/.config/port-authority/token` (`0600`), required as a Bearer token on every request
 - **State**: `~/.local/share/port-authority/allocations.json`
 - **CLI**: `port` (friendly wrapper) / `port-request` (full subcommands: `request`, `release`, `status`, `gc`)
+- **MCP server**: `port_authority/mcp_server.py` (`port-authority-mcp` once installed) — optional, thin adapter over the same client the CLI uses
 
 ## How allocation ownership works
 

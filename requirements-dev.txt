@@ -1,2 +1,8 @@
 -r requirements.txt
 pytest>=7.0.0
+
+# mcp requires Python 3.10+ (the base package supports 3.9+); this marker
+# lets `pip install -r requirements-dev.txt` succeed on 3.9 by simply
+# skipping it -- tests/test_mcp_server.py is pytest.importorskip-gated and
+# skips cleanly rather than failing when mcp isn't installed.
+mcp[cli]>=2.0.0; python_version >= "3.10"

@@ -50,6 +50,31 @@ Now agents can do:
 /port-request myproject myservice
 ```
 
+## 4b. Register the MCP Server (Non-Claude-Code Agents)
+
+Steps 3–4 only mean anything inside Claude Code — `.claude/CLAUDE.md` and the skill are files that tool specifically reads. For Claude Desktop or any other MCP-compatible client, register the actual MCP server instead:
+
+```bash
+pip install -r ~/.local/src/port-authority/requirements-mcp.txt
+```
+
+Then add it to the client's MCP config (path/format varies by client — this is the general shape):
+
+```json
+{
+  "mcpServers": {
+    "port-authority": {
+      "command": "python3",
+      "args": [
+        "/home/you/.local/src/port-authority/port_authority/mcp_server.py"
+      ]
+    }
+  }
+}
+```
+
+The client will see `request_port`, `release_port`, `port_status`, and `port_gc` as native tools — no `.claude/` convention needed, and it works with any client, not just this one repo's skill.
+
 ## 5. Set Up Git Hook (Optional)
 
 Copy pre-commit hook to catch hardcoded ports:
@@ -144,6 +169,7 @@ echo "@~/.local/src/port-authority/.claude/CLAUDE.md" >> .claude/CLAUDE.md
 - [ ] Port Authority daemon installed globally
 - [ ] Project has `.claude/CLAUDE.md` (or CLAUDE-port-authority.md)
 - [ ] (Optional) Claude Code skill copied to `.claude/skills/`
+- [ ] (Optional) MCP server registered for non-Claude-Code agents (`requirements-mcp.txt` + client config)
 - [ ] (Optional) Git hook installed to `.git/hooks/pre-commit`
 - [ ] Tested: `port myproject testservice` returns a port
 - [ ] Updated startup scripts to use `$(port ...)`

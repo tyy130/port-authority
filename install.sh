@@ -14,10 +14,12 @@ pip install -q --break-system-packages -r requirements.txt 2>/dev/null || pip in
 # Create symlinks for CLI tools
 ln -sf "$(pwd)/port_authority/cli.py" ~/.local/bin/port-request
 ln -sf "$(pwd)/port_authority/daemon.py" ~/.local/bin/port-authority-daemon
+ln -sf "$(pwd)/port_authority/mcp_server.py" ~/.local/bin/port-authority-mcp
 ln -sf "$(pwd)/bin/port" ~/.local/bin/port
 
 chmod +x ~/.local/bin/port-request
 chmod +x ~/.local/bin/port-authority-daemon
+chmod +x ~/.local/bin/port-authority-mcp
 chmod +x ~/.local/bin/port
 
 # Create default config if not exists
@@ -119,3 +121,8 @@ echo "  port myproject myservice"
 echo ""
 echo "View status:"
 echo "  port status"
+echo ""
+echo "Want any MCP-compatible agent (not just Claude Code) to call this as a"
+echo "native tool? It's an optional dependency, not installed by default:"
+echo "  pip install -r requirements-mcp.txt"
+echo "  # then register port-authority-mcp with your client — see README.md"
