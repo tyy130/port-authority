@@ -7,6 +7,8 @@
 
 A small local daemon that hands out ports on request instead of every project guessing or scanning for a free one. One project asks "give me a port for `web`," another asks for `api`, and Port Authority makes sure they never collide — including with things it didn't allocate (Docker containers, stray processes, anything already bound).
 
+![Port Authority demo](assets/demo.gif)
+
 ## Features
 
 - **Centralized allocation**: one registry instead of every project picking its own port
