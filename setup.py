@@ -12,7 +12,7 @@ setup(
     # (port-request, port-authority-daemon, ...), and GitHub repo are
     # unaffected -- this only changes what `pip install` needs.
     name='portauth',
-    version='0.1.0',
+    version='0.1.1',
     description='Centralized port allocation daemon — agents and scripts request a port instead of hardcoding or guessing one',
     long_description=long_description,
     long_description_content_type='text/markdown',
