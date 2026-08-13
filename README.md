@@ -126,7 +126,7 @@ Copy `.claude/CLAUDE.md` from this repo into your project (or `@`-reference it) 
 
 The `.claude/` convention above only means anything to Claude Code — it's a file another tool has no reason to look at. For every other MCP-compatible client (Claude Desktop, other agent frameworks), Port Authority also ships as a real [MCP](https://modelcontextprotocol.io) server exposing `request_port`, `release_port`, `port_status`, and `port_gc` as native tools, over the standard stdio transport.
 
-This is an optional dependency (requires Python 3.10+; the base install works on 3.9+ and stays stdlib-only otherwise):
+This is an optional extra on top of the base install (`requests` + `pyyaml`) and requires Python 3.10+ (the base install works on 3.9+):
 
 ```bash
 pip install -r requirements-mcp.txt   # or: pip install "portauth[mcp]"
