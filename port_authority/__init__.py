@@ -50,7 +50,12 @@ def release_port(project, service):
             'project': project,
             'service': service,
         }, headers=auth_headers(), timeout=2)
-        return resp.json().get('success', False)
+        data = resp.json()
+
+        if 'error' in data:
+            raise Exception(data['error'])
+
+        return data.get('success', False)
     except requests.ConnectionError:
         raise Exception("Port Authority daemon not running")
 
@@ -67,7 +72,12 @@ def get_status(project=None):
     try:
         params = {'project': project} if project else {}
         resp = requests.get(f'{API_URL}/status', params=params, headers=auth_headers(), timeout=2)
-        return resp.json()
+        data = resp.json()
+
+        if 'error' in data:
+            raise Exception(data['error'])
+
+        return data
     except requests.ConnectionError:
         raise Exception("Port Authority daemon not running")
 
@@ -86,7 +96,12 @@ def gc(force=False):
         resp = requests.get(f'{API_URL}/gc', params={
             'dry_run': 'false' if force else 'true',
         }, headers=auth_headers(), timeout=5)
-        return resp.json()['released']
+        data = resp.json()
+
+        if 'error' in data:
+            raise Exception(data['error'])
+
+        return data['released']
     except requests.ConnectionError:
         raise Exception("Port Authority daemon not running")
 

@@ -1,6 +1,7 @@
 # Port Authority
 
 [![Tests](https://github.com/tyy130/port-authority/actions/workflows/test.yml/badge.svg)](https://github.com/tyy130/port-authority/actions/workflows/test.yml)
+[![PyPI version](https://img.shields.io/pypi/v/portauth)](https://pypi.org/project/portauth/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](setup.py)
 
@@ -33,6 +34,8 @@ cd port-authority
 `install.sh` installs the Python deps, symlinks the CLI into `~/.local/bin`, writes a default config, and installs + starts the daemon as a background service — a systemd user unit on Linux, a launchd agent on macOS. Falls back to printing manual-start instructions if neither is available.
 
 Make sure `~/.local/bin` is on your `PATH`.
+
+Prefer `pip`? `pip install portauth` gets you the CLI and library (published as `portauth` — see [why](setup.py)), but you're on your own for starting the daemon (`port-authority-daemon &`) and keeping it running, since `install.sh` is what wires up the systemd/launchd service.
 
 ### Usage
 
@@ -124,7 +127,7 @@ The `.claude/` convention above only means anything to Claude Code — it's a fi
 This is an optional dependency (requires Python 3.10+; the base install works on 3.9+ and stays stdlib-only otherwise):
 
 ```bash
-pip install -r requirements-mcp.txt   # or: pip install "port-authority[mcp]"
+pip install -r requirements-mcp.txt   # or: pip install "portauth[mcp]"
 ```
 
 Register it with any MCP client by pointing at the script (adjust the path to your clone):

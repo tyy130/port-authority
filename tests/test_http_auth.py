@@ -66,3 +66,58 @@ def test_request_allocates_a_real_port_end_to_end(live_server):
     resp = _get(f'{live_server}/request?project=proj&service=svc', token='test-token-123')
     data = json.loads(resp.read())
     assert 3000 <= data['port'] <= 4000
+
+
+# The daemon correctly answers a bad/stale token with a 401 + {"error": ...}
+# body (covered above). These check the *clients* actually surface that as a
+# clean error instead of blindly treating the error body as real data --
+# status/gc used to crash with AttributeError/KeyError here because nothing
+# checked for an 'error' key before indexing into the response.
+
+def test_get_status_with_wrong_token_raises_clean_error(live_server, monkeypatch):
+    import port_authority as pa_lib
+    monkeypatch.setattr(pa_lib, 'API_URL', live_server)
+    monkeypatch.setattr(pa_lib, 'auth_headers', lambda: {'Authorization': 'Bearer wrong-token'})
+
+    with pytest.raises(Exception, match='unauthorized'):
+        pa_lib.get_status()
+
+
+def test_gc_with_wrong_token_raises_clean_error(live_server, monkeypatch):
+    import port_authority as pa_lib
+    monkeypatch.setattr(pa_lib, 'API_URL', live_server)
+    monkeypatch.setattr(pa_lib, 'auth_headers', lambda: {'Authorization': 'Bearer wrong-token'})
+
+    with pytest.raises(Exception, match='unauthorized'):
+        pa_lib.gc()
+
+
+def test_release_port_with_wrong_token_raises_clean_error(live_server, monkeypatch):
+    import port_authority as pa_lib
+    monkeypatch.setattr(pa_lib, 'API_URL', live_server)
+    monkeypatch.setattr(pa_lib, 'auth_headers', lambda: {'Authorization': 'Bearer wrong-token'})
+
+    with pytest.raises(Exception, match='unauthorized'):
+        pa_lib.release_port('proj', 'svc')
+
+
+def test_cli_status_with_wrong_token_exits_cleanly(live_server, monkeypatch, capsys):
+    from port_authority import cli
+    monkeypatch.setattr(cli, 'API_URL', live_server)
+    monkeypatch.setattr(cli, '_headers_or_exit', lambda: {'Authorization': 'Bearer wrong-token'})
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.show_status()
+    assert exc_info.value.code == 1
+    assert 'unauthorized' in capsys.readouterr().err
+
+
+def test_cli_gc_with_wrong_token_exits_cleanly(live_server, monkeypatch, capsys):
+    from port_authority import cli
+    monkeypatch.setattr(cli, 'API_URL', live_server)
+    monkeypatch.setattr(cli, '_headers_or_exit', lambda: {'Authorization': 'Bearer wrong-token'})
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.run_gc()
+    assert exc_info.value.code == 1
+    assert 'unauthorized' in capsys.readouterr().err

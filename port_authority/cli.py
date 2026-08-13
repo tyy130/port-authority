@@ -69,6 +69,10 @@ def show_status(project=None):
         resp = requests.get(f'{API_URL}/status', params=params, headers=_headers_or_exit(), timeout=2)
         data = resp.json()
 
+        if 'error' in data:
+            print(f"Error: {data['error']}", file=sys.stderr)
+            sys.exit(1)
+
         if not data:
             print("No allocations")
             return
@@ -90,6 +94,11 @@ def run_gc(force=False):
             'dry_run': 'false' if force else 'true',
         }, headers=_headers_or_exit(), timeout=5)
         data = resp.json()
+
+        if 'error' in data:
+            print(f"Error: {data['error']}", file=sys.stderr)
+            sys.exit(1)
+
         released = data['released']
 
         if not released:
